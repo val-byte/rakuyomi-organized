@@ -49,14 +49,14 @@ pub async fn ensure_chapter_is_in_storage(
     current_chapter_id: Option<&ChapterId>,
 ) -> Result<(PathBuf, Vec<DownloadError>), Error> {
     if use_ram {
-        if let Some(output) = chapter_storage.get_stored_chapter_and_errors(&chapter.id, true)? {
+        if let Some(output) = chapter_storage.get_stored_chapter_and_errors(chapter.chapter_number, manga.title.as_deref().unwrap_or("Unknown"), chapter.volume_number, &chapter.id, true)? {
             return Ok((
                 output.0,
                 output.1.unwrap_or_else(|| Vec::<DownloadError>::from([])),
             ));
         }
     }
-    if let Some(output) = chapter_storage.get_stored_chapter_and_errors(&chapter.id, false)? {
+    if let Some(output) = chapter_storage.get_stored_chapter_and_errors(chapter.chapter_number, manga.title.as_deref().unwrap_or("Unknown"), chapter.volume_number, &chapter.id, false)? {
         return Ok((
             output.0,
             output.1.unwrap_or_else(|| Vec::<DownloadError>::from([])),
@@ -87,7 +87,7 @@ pub async fn ensure_chapter_is_in_storage(
     // and then commit it into the storage (or maybe a implicit commit on drop, but i dont think it works well as there
     // could be errors while committing it)
     let output_path: PathBuf =
-        chapter_storage.get_path_to_store_chapter(&chapter.id, is_novel, use_ram);
+        chapter_storage.get_path_to_store_chapter(chapter.chapter_number, manga.title.as_deref().unwrap_or("Unknown"), chapter.volume_number, &chapter.id, is_novel, use_ram);
 
     let metadata = ComicInfo::from_source_metadata(manga.clone(), chapter.clone(), &pages);
 
@@ -101,7 +101,7 @@ pub async fn ensure_chapter_is_in_storage(
     // in mode write to RAM before download to free memory
     if use_ram && current_chapter_id.is_some() {
         let _ = chapter_storage
-            .evict_tmpfs_older_than_current(current_chapter_id.unwrap(), is_novel)
+            .evict_tmpfs_older_than_current(chapter.chapter_number, manga.title.as_deref().unwrap_or("Unknown"), chapter.volume_number, current_chapter_id.unwrap(), is_novel)
             .await;
     }
     let errors = if is_novel {
@@ -146,7 +146,7 @@ pub async fn ensure_chapter_is_in_storage(
     // If we succeeded downloading all the chapter pages, persist our temporary
     // file into the chapter storage definitively.
     chapter_storage
-        .persist_chapter(&chapter.id, is_novel, temporary_file, &errors, use_ram)
+        .persist_chapter(chapter.chapter_number, manga.title.as_deref().unwrap_or("Unknown"), chapter.volume_number, &chapter.id, is_novel, temporary_file, &errors, use_ram)
         .await
         .with_context(|| {
             format!(

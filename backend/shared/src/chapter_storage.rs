@@ -562,6 +562,9 @@ impl ChapterStorage {
 
         // Persist using the new path format
         let path = self.path_for_chapter(id, manga_title, chapter_number, volume_number, is_novel, use_ram);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         temporary_file.persist(&path)?;
 
         // Update cache with new file size

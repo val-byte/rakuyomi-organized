@@ -1,3 +1,5 @@
+// organized code is in here btw
+
 use dom_query::Document;
 use futures::{stream, StreamExt};
 use reqwest::{redirect::Policy, Client};

@@ -7,7 +7,7 @@ pub async fn revoke_manga_chapter(
     chapter: &ChapterId,
     use_ram: bool,
 ) -> Result<bool, Error> {
-    let Some(path) = chapter_storage.get_stored_chapter(chapter, use_ram) else {
+    let Some(path) = chapter_storage.get_stored_chapter(None, "", None, chapter, use_ram) else {
         // No chapter stored → nothing removed
         return Ok(false);
     };

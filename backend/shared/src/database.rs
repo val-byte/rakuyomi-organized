@@ -1357,9 +1357,9 @@ impl Database {
              last_read: row.last_read,
             };
 
-            let mut downloaded = chapter_storage.get_stored_chapter(&id, false).is_some();
+            let mut downloaded = chapter_storage.get_stored_chapter(None, "", None, &id, false).is_some();
             let on_tmpfs =
-            ram_mode_enabled && chapter_storage.get_stored_chapter(&id, true).is_some();
+            ram_mode_enabled && chapter_storage.get_stored_chapter(None, "", None, &id, true).is_some();
             if on_tmpfs {
                 downloaded = true;
             }

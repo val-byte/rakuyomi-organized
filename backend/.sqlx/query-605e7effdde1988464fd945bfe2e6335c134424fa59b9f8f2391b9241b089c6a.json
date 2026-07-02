@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n            COUNT(*) as \"count: i32\"\n            FROM\n            notifications\n            WHERE is_read = 0\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "count: i32",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "605e7effdde1988464fd945bfe2e6335c134424fa59b9f8f2391b9241b089c6a"
+}

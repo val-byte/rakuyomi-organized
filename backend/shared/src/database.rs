@@ -1311,6 +1311,7 @@ impl Database {
             ci.thumbnail,
             ci.lang,
             ci.locked AS "locked: bool",
+            mi.title AS manga_title,
             cs.read AS "read?: bool",
             cs.last_read AS "last_read?: i64"
             FROM chapter_informations ci
@@ -1318,6 +1319,9 @@ impl Database {
             ON ci.source_id = cs.source_id
             AND ci.manga_id = cs.manga_id
             AND ci.chapter_id = cs.chapter_id
+            LEFT JOIN manga_informations mi
+            ON ci.source_id = mi.source_id
+            AND ci.manga_id = mi.manga_id
             WHERE ci.source_id = ?1 AND ci.manga_id = ?2
             GROUP BY ci.source_id, ci.manga_id, ci.chapter_id
             ORDER BY ci.manga_order ASC;
@@ -1357,9 +1361,11 @@ impl Database {
              last_read: row.last_read,
             };
 
-            let mut downloaded = chapter_storage.get_stored_chapter(None, "", None, &id, false).is_some();
-            let on_tmpfs =
-            ram_mode_enabled && chapter_storage.get_stored_chapter(None, "", None, &id, true).is_some();
+            let chapter_number_f32 = information.chapter_number
+            let volume_number_f32 = information.volume_number
+            let manga_title = row.manga_title.as_deref().unwrap_or("Unknown");
+            let mut downloaded = chapter_storage.get_stored_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, false).is_some();
+            let on_tmpfs = ram_mode_enabled && chapter_storage.get_stored_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, true).is_some();
             if on_tmpfs {
                 downloaded = true;
             }

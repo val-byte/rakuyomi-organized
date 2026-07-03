@@ -1361,8 +1361,8 @@ impl Database {
              last_read: row.last_read,
             };
 
-            let chapter_number_f32 = information.chapter_number
-            let volume_number_f32 = information.volume_number
+            let chapter_number_f32 = information.chapter_number;
+            let volume_number_f32 = information.volume_number;
             let manga_title = row.manga_title.as_deref().unwrap_or("Unknown");
             let mut downloaded = chapter_storage.get_stored_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, false).is_some();
             let on_tmpfs = ram_mode_enabled && chapter_storage.get_stored_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, true).is_some();

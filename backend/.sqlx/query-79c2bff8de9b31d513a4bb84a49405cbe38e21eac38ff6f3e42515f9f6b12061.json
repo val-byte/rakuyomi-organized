@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n            ci.source_id,\n            ci.manga_id,\n            ci.chapter_id,\n            ci.title,\n            ci.scanlator,\n            ci.chapter_number,\n            ci.volume_number,\n            ci.last_updated,\n            ci.thumbnail,\n            ci.lang,\n            ci.locked AS \"locked: bool\",\n            cs.read AS \"read?: bool\",\n            cs.last_read AS \"last_read?: i64\"\n            FROM chapter_informations ci\n            LEFT JOIN chapter_state cs\n            ON ci.source_id = cs.source_id\n            AND ci.manga_id = cs.manga_id\n            AND ci.chapter_id = cs.chapter_id\n            WHERE ci.source_id = ?1 AND ci.manga_id = ?2\n            GROUP BY ci.source_id, ci.manga_id, ci.chapter_id\n            ORDER BY ci.manga_order ASC;\n            ",
+  "query": "\n            SELECT\n            ci.source_id,\n            ci.manga_id,\n            ci.chapter_id,\n            ci.title,\n            ci.scanlator,\n            ci.chapter_number,\n            ci.volume_number,\n            ci.last_updated,\n            ci.thumbnail,\n            ci.lang,\n            ci.locked AS \"locked: bool\",\n            mi.title AS manga_title,\n            cs.read AS \"read?: bool\",\n            cs.last_read AS \"last_read?: i64\"\n            FROM chapter_informations ci\n            LEFT JOIN chapter_state cs\n            ON ci.source_id = cs.source_id\n            AND ci.manga_id = cs.manga_id\n            AND ci.chapter_id = cs.chapter_id\n            LEFT JOIN manga_informations mi\n            ON ci.source_id = mi.source_id\n            AND ci.manga_id = mi.manga_id\n            WHERE ci.source_id = ?1 AND ci.manga_id = ?2\n            GROUP BY ci.source_id, ci.manga_id, ci.chapter_id\n            ORDER BY ci.manga_order ASC;\n            ",
   "describe": {
     "columns": [
       {
@@ -59,13 +59,18 @@
         "type_info": "Integer"
       },
       {
-        "name": "read?: bool",
+        "name": "manga_title",
         "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "read?: bool",
+        "ordinal": 12,
         "type_info": "Integer"
       },
       {
         "name": "last_read?: i64",
-        "ordinal": 12,
+        "ordinal": 13,
         "type_info": "Integer"
       }
     ],
@@ -84,9 +89,10 @@
       true,
       true,
       false,
+      true,
       false,
       true
     ]
   },
-  "hash": "34079f279f0ccc6acb07c4bce67ab0bd161a93227144156bec2b410a6809f31a"
+  "hash": "79c2bff8de9b31d513a4bb84a49405cbe38e21eac38ff6f3e42515f9f6b12061"
 }

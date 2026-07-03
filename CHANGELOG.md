@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/val-byte/rakuyomi-organized/compare/v1.0.0...v1.1.0) (2026-07-03)
+
+
+### Features
+
+* delete docs, to use github wiki ([fc80887](https://github.com/val-byte/rakuyomi-organized/commit/fc808870080e10e52119d91e84f6bbd09af1c032))
+
 # 1.0.0 (2026-07-03)
 
 

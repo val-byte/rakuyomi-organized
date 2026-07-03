@@ -37,5 +37,11 @@ This fork:
 </p>
 
 ## Installation & Usage
+### Simplified Install Procedure
+1. Install the build needed. For kobo, pocketbook, and other ARM readers, use the kindle build.
+2. Connect your device as USB Storage, navigate to your KOReader install folder, and go to the plugins folder.
+3. Extract the rakuyomi build zip, and move the rakuyomi.koplugin folder into the plugins folder.
+4. After that, you can use the quickstart guide down below!
 
+### Detailed Install Procedure
 For detailed installation and usage instructions, please check out the [Installation](https://tachibana-shin.github.io/rakuyomi/user-guide/installation/README.html) and [Quickstart](https://tachibana-shin.github.io/rakuyomi/user-guide/quickstart) sections on our user guide!

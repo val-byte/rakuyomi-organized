@@ -4,6 +4,7 @@ use dom_query::Document;
 use futures::{stream, StreamExt};
 use reqwest::{redirect::Policy, Client};
 use std::{
+    fs,
     io::{Cursor, Seek, Write},
     path::{Path, PathBuf},
     sync::Arc,
@@ -95,9 +96,11 @@ pub async fn ensure_chapter_is_in_storage(
 
     // Write chapter pages to a temporary file, so that if things go wrong
     // we do not have a borked .cbz file in the chapter storage.
+    // this dude is needed down here, fs::create_dir_all()
     let parent = output_path
         .parent()
         .ok_or_else(|| Error::Other(anyhow::anyhow!("Output path has no parent")))?;
+    fs::create_dir_all(parent).map_err(|e| Error::Other(e.into()))?;
     let temporary_file = NamedTempFile::new_in(parent).map_err(|e| Error::Other(e.into()))?;
 
     // in mode write to RAM before download to free memory

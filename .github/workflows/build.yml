@@ -14,6 +14,7 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
   build:
+    needs: [sqlx-prepare]
     runs-on: ubuntu-latest
     env:
       SQLX_OFFLINE: "false"
@@ -113,7 +114,44 @@ jobs:
     - name: Build plugin for android
       if: ${{ matrix.target == 'android' }}
       run: bash scripts/build-rust-android.sh
+      
+  sqlx-prepare:
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: true
 
+    - name: Install system deps
+      run: sudo apt update && sudo apt install -y pkg-config libfontconfig1-dev libfreetype6-dev
+
+    - name: Install Rust 1.95.0
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: 1.95.0
+        profile: minimal
+        override: true
+
+    - name: Install sqlx-cli
+      run: cargo install sqlx-cli --no-default-features --features sqlite
+
+    - name: Regenerate sqlx cache
+      run: |
+        cd backend
+        export DATABASE_URL="sqlite://dev.db"
+        sqlx database create
+        sqlx migrate run
+        cargo sqlx prepare --workspace
+
+    - name: Commit updated cache if changed
+      run: |
+        git config user.name "github-actions"
+        git config user.email "actions@github.com"
+        git add backend/.sqlx
+        git diff --staged --quiet || git commit -m "chore: update sqlx query cache [skip ci]"
+        git push
+        
   generate-settings-schema:
     runs-on: ubuntu-latest
     env:

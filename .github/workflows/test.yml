@@ -11,7 +11,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    env:
+      SQLX_OFFLINE = "true"
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

@@ -12,12 +12,13 @@ jobs:
   luacheck:
     uses: ./.github/workflows/luacheck.yml
   test:
+    needs: [sqlx-prepare]
     uses: ./.github/workflows/test.yml
   build:
     needs: [sqlx-prepare]
     runs-on: ubuntu-latest
     env:
-      SQLX_OFFLINE: "false"
+      SQLX_OFFLINE: "true"
     strategy:
       matrix:
         target: ["aarch64", "desktop", "kindle", "kindlehf", "kindlea9", "android"]

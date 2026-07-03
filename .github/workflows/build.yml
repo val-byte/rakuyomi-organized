@@ -142,7 +142,7 @@ jobs:
         cd backend
         export DATABASE_URL="sqlite://dev.db"
         sqlx database create
-        sqlx migrate run
+        sqlx migrate run --source shared/migrations
         cargo sqlx prepare --workspace
 
     - name: Commit updated cache if changed

@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/val-byte/rakuyomi-organized/compare/v1.0.0...v1.1.0) (2026-07-03)
+
+
+### Features
+
+* readme file changes ([69a2921](https://github.com/val-byte/rakuyomi-organized/commit/69a2921a998ad581f215d0fbdc062a78081c41f4))
+
 # 1.0.0 (2026-07-02)
 
 

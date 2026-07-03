@@ -12,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      SQLX_OFFLINE = "true"
+      SQLX_OFFLINE: "true"
     
     steps:
       - name: Checkout code

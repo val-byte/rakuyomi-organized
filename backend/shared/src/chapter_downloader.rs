@@ -98,6 +98,7 @@ pub async fn ensure_chapter_is_in_storage(
     let parent = output_path
         .parent()
         .ok_or_else(|| Error::Other(anyhow::anyhow!("Output path has no parent")))?;
+    fs::create_dir_all(parent).map_err(|e| Error::Other(e.into()))?;
     let temporary_file = NamedTempFile::new_in(parent).map_err(|e| Error::Other(e.into()))?;
 
     // in mode write to RAM before download to free memory

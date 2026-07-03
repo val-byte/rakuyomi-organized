@@ -4,6 +4,7 @@ use dom_query::Document;
 use futures::{stream, StreamExt};
 use reqwest::{redirect::Policy, Client};
 use std::{
+    fs,
     io::{Cursor, Seek, Write},
     path::{Path, PathBuf},
     sync::Arc,

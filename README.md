@@ -6,42 +6,16 @@ This is val-byte's fork, made for his personal usecase. If you want to use it, i
 
  `rakuyomi` currently supports all [Aidoku](https://github.com/Aidoku) sources including sources written with legacy SDK or next SDK ([Aidoku Community Sources](https://github.com/Aidoku-Community/sources), [Tachibana Shin Sources](https://github.com/tachibana-shin/aidoku-community-sources)
 
-> [!TIP]
-> If you want to run Rakuyomi as soon as you open Koreader, use this plugin: https://github.com/mgrimace/startrakuyomi.koplugin
-
 This fork:
 - Adds support for organized manga. It organizes manga into a folder, and changes the filename of the manga chapter/volume to something readable.
-<table>
-  <tr>
-    <td><img width="464" height="702" alt="image" src="https://github.com/user-attachments/assets/93edb17e-d690-40e5-843f-64dacc2d5deb" /></td>
-    <td><img width="464" height="702" alt="image" src="https://github.com/user-attachments/assets/98436b56-f703-40b1-b662-69a13106c185" /></td>
-    <td><img width="464" height="702" alt="image" src="https://github.com/user-attachments/assets/db0ad47b-6e19-4ce5-ba1a-f7a147777687" /></td>
-  </tr>
-  <tr>
-    <td><img width="200" alt="image" src="https://github.com/user-attachments/assets/cccf4076-79d3-4eb2-af80-62266b0e7ede" /></td>
-    <td><img src="https://github.com/user-attachments/assets/4edec936-8034-4467-bdce-5b060d799967" width="200" /></td>
-    <td><img src="https://github.com/user-attachments/assets/1c5d29fe-5a2f-4bf9-8437-bd1afe1b4e8b" width="200" /></td>
-  </tr>
-<tr>
-  <td><img src="https://github.com/user-attachments/assets/89397e28-65ae-46dc-b36f-dfc1d5e5b78c" width="200" /></td>
-  <td><img src="https://github.com/user-attachments/assets/e71a161f-ffa0-4109-b602-3c36d3fddc2f" width="200" /></td>
-  <td><img src="https://github.com/user-attachments/assets/36957374-89fb-490c-bea9-f52f750ca1d9" width="200" /></td>
-</tr>
-</table>
-<em>Open source for Every One</em>
+
+## Installation
+Use the Github Wiki for this project to install rakuyomi!
+
+<em>FOSS for Everyone</em>
 
 <p align="center">
     <img src="docs/src/images/demo.gif" width="60%" />
     <br/>
     <em><small><a href="https://seotch.wordpress.com/ubunchu/">"Ubunchu!"</a> by Hiroshi Seo is licensed under <a href="https://creativecommons.org/licenses/by-nc/3.0/">CC BY-NC 3.0</a>.</small></em>
 </p>
-
-## Installation & Usage
-### Simplified Install Procedure
-1. Install the build needed. For kobo, pocketbook, and other ARM readers, use the kindle build.
-2. Connect your device as USB Storage, navigate to your KOReader install folder, and go to the plugins folder.
-3. Extract the rakuyomi build zip, and move the rakuyomi.koplugin folder into the plugins folder.
-4. After that, you can use the quickstart guide down below!
-
-### Detailed Install Procedure
-For detailed installation and usage instructions, please check out the [Installation](https://tachibana-shin.github.io/rakuyomi/user-guide/installation/README.html) and [Quickstart](https://tachibana-shin.github.io/rakuyomi/user-guide/quickstart) sections on our user guide!

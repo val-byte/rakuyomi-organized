@@ -1158,7 +1158,7 @@ impl Database {
         invalid_mode: bool,
     ) -> Result<Vec<PathBuf>> {
         if invalid_mode {
-            let mut remaining = chapter_storage.collect_all_files(1);
+            let mut remaining = chapter_storage.collect_all_files(2);
             let pool_lock = self.pool.read().await;
             let mut stream = sqlx::query_as!(
                 ChapterInformationsRow,

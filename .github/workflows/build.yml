@@ -12,10 +12,8 @@ jobs:
   luacheck:
     uses: ./.github/workflows/luacheck.yml
   test:
-    needs: [sqlx-prepare]
     uses: ./.github/workflows/test.yml
   build:
-    needs: [sqlx-prepare]
     runs-on: ubuntu-latest
     env:
       SQLX_OFFLINE: "true"
@@ -58,6 +56,15 @@ jobs:
         components: rustfmt, clippy
         override: true
 
+    - name: Install sqlx-cli
+      run: cargo install sqlx-cli --no-default-features --features sqlite
+    - name: Set up database
+      working-directory: ./backend
+      run: |
+        export DATABASE_URL="sqlite://dev.db"
+        sqlx database create
+        sqlx migrate run --source shared/migrations
+
     - name: Install cross
       run: cargo install cross
 
@@ -74,12 +81,16 @@ jobs:
       id: get-next-version
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Build plugin
+      env:
+        DATABASE_URL: "sqlite://backend/dev.db"
       run: |
         export SEMANTIC_RELEASE_VERSION="${{ steps.get-next-version.outputs.new-release-git-tag }}"
         # Using `--impure` here kinda sucks, but it's needed so that we can insert the `semantic-release`
         # version into the build.
         bash scripts/build-all.sh ${{ matrix.target }}
+      
     - name: Package plugin contents
       run: "cd build && zip -r rakuyomi-${{ matrix.target }}.zip rakuyomi.koplugin"
     - name: Upload plugin as workflow artifact

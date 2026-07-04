@@ -148,7 +148,7 @@ async fn find_orphan_or_read_files(
 
     let filenames: Vec<String> = paths
         .iter()
-        .filter_map(|p| p.file_name()?.to_str().map(|s| s.to_string()))
+        .filter_map(|p| p.strip_prefix(chapter_storage.downloads_path()).ok().and_then(|path| path.to_str().map(|s| s.to_string())))
         .collect();
 
     let mut total_size = 0u64;

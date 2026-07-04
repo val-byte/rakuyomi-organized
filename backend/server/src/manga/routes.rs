@@ -644,6 +644,7 @@ struct RevokeMangaChapterQuery {
 }
 async fn revoke_manga_chapter(
     StateExtractor(State {
+        database,
         chapter_storage, ..
     }): StateExtractor<State>,
     Path(params): Path<DownloadMangaChapterParams>,
@@ -653,6 +654,7 @@ async fn revoke_manga_chapter(
     let chapter_storage = &*chapter_storage.lock().await;
 
     let result = usecases::revoke_manga_chapter(
+        &database,
         chapter_storage,
         &chapter_id,
         query.use_ram.unwrap_or(false),

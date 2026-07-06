@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    cs.source_id, cs.manga_id, cs.chapter_id,\n                    mi.title AS manga_title,\n                    ci.chapter_number, ci.volume_number\n                FROM chapter_state cs\n                LEFT JOIN manga_informations mi\n                    ON cs.source_id = mi.source_id AND cs.manga_id = mi.manga_id\n                LEFT JOIN chapter_informations ci\n                    ON cs.source_id = ci.source_id AND cs.manga_id = ci.manga_id AND cs.chapter_id = ci.chapter_id\n                WHERE cs.read = 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "source_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "manga_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "manga_title",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_number",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "volume_number",
+        "ordinal": 5,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1a1629bafec1ebaf709b4e100f88e72c018f173eed0e662f8da3f85b15c4793b"
+}

@@ -1,3 +1,5 @@
+// organized code is in here btw
+
 use std::io::Cursor;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
@@ -203,13 +205,16 @@ impl ChapterStorage {
 
     pub async fn evict_tmpfs_older_than_current(
         &self,
+        chapter_number: Option<f32>,
+        manga_title: &str,
+        volume_number: Option<f32>,
         current_chapter_id: &ChapterId,
         is_novel: bool,
     ) -> Result<u64> {
         if !self.ram_enabled {
             return Ok(0);
         }
-        let current_path = self.path_for_chapter(current_chapter_id, is_novel, true);
+        let current_path = self.path_for_chapter(current_chapter_id, manga_title, chapter_number, volume_number, is_novel, true);
         if !current_path.exists() {
             return Ok(0);
         }
@@ -425,6 +430,9 @@ impl ChapterStorage {
 
     pub fn get_stored_chapter_and_errors(
         &self,
+        chapter_number: Option<f32>,
+        manga_title: &str,
+        volume_number: Option<f32>,
         id: &ChapterId,
         use_ram: bool,
     ) -> anyhow::Result<
@@ -433,7 +441,7 @@ impl ChapterStorage {
             Option<Vec<crate::chapter_downloader::DownloadError>>,
         )>,
     > {
-        if let Some(path) = self.get_stored_chapter(id, use_ram) {
+        if let Some(path) = self.get_stored_chapter(chapter_number, manga_title, volume_number, id, use_ram) {
             let file_errors = self.errors_source_path(&path)?;
 
             let errors = match std::fs::read(&file_errors) {
@@ -450,13 +458,19 @@ impl ChapterStorage {
         Ok(None)
     }
 
-    pub fn get_stored_chapter(&self, id: &ChapterId, use_ram: bool) -> Option<PathBuf> {
-        let new_path = self.path_for_chapter(id, false, use_ram);
+    pub fn get_stored_chapter(
+        &self,
+        chapter_number: Option<f32>,
+        manga_title: &str,
+        volume_number: Option<f32>,
+        id: &ChapterId,
+        use_ram: bool) -> Option<PathBuf> {
+        let new_path = self.path_for_chapter(id, manga_title, chapter_number, volume_number, false, use_ram);
         if new_path.exists() {
             return Some(new_path);
         }
 
-        let new_path_novel = self.path_for_chapter(id, true, use_ram);
+        let new_path_novel = self.path_for_chapter(id, manga_title, chapter_number, volume_number, true, use_ram);
         if new_path_novel.exists() {
             return Some(new_path_novel);
         }
@@ -481,12 +495,14 @@ impl ChapterStorage {
 
     pub fn get_path_to_store_chapter(
         &self,
+        chapter_number: Option<f32>,
+        manga_title: &str,
+        volume_number: Option<f32>,
         id: &ChapterId,
         is_novel: bool,
         use_ram: bool,
     ) -> PathBuf {
-        // New chapters should always use the new path format
-        self.path_for_chapter(id, is_novel, use_ram)
+        self.path_for_chapter(id, manga_title, chapter_number, volume_number, is_novel, use_ram)
     }
 
     pub fn errors_source_path(&self, path: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
@@ -508,6 +524,9 @@ impl ChapterStorage {
     // FIXME depending on `NamedTempFile` here is pretty ugly
     pub async fn persist_chapter(
         &self,
+        chapter_number: Option<f32>,
+        manga_title: &str,
+        volume_number: Option<f32>,
         id: &ChapterId,
         is_novel: bool,
         temporary_file: NamedTempFile,
@@ -542,7 +561,10 @@ impl ChapterStorage {
         }
 
         // Persist using the new path format
-        let path = self.path_for_chapter(id, is_novel, use_ram);
+        let path = self.path_for_chapter(id, manga_title, chapter_number, volume_number, is_novel, use_ram);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         temporary_file.persist(&path)?;
 
         // Update cache with new file size
@@ -670,22 +692,31 @@ impl ChapterStorage {
         self.downloads_folder_path.join(output_filename)
     }
 
-    fn path_for_chapter(&self, chapter_id: &ChapterId, is_novel: bool, use_ram: bool) -> PathBuf {
-        let mut hasher = Sha256::new();
-        hasher.update(chapter_id.source_id().value().as_bytes());
-        hasher.update(chapter_id.manga_id().value().as_bytes());
-        hasher.update(chapter_id.value().as_bytes());
-        let hash_result = hasher.finalize();
+    fn path_for_chapter(
+        &self,
+        chapter_id: &ChapterId,
+        manga_title: &str,
+        chapter_number: Option<f32>,
+        volume_number: Option<f32>,
+        is_novel: bool,
+        use_ram: bool) -> PathBuf {
+        let chapter_label = match (volume_number, chapter_number) {
+            (Some(v), Some(c)) => format!("Vol.{} Chapter {}", v, c),
+            (None, Some(c)) => format!("Chapter {}", c),
+            (_, None) => format!("Chapter Unknown ({})", chapter_id.value()),
+        };
+        let opts = sanitize_filename::Options {
+            replacement: "-",
+            ..Default::default()
+        };
+        let safe_manga_title = sanitize_filename::sanitize_with_options(manga_title, opts);
 
-        // Use URL-safe base64 encoding without padding for the filename
-        let encoded_hash = general_purpose::URL_SAFE_NO_PAD.encode(hash_result);
-
-        let output_filename = format!("{}.{}", encoded_hash, if is_novel { "epub" } else { "cbz" });
+        let output_filename = format!("{} - {}{}", safe_manga_title, chapter_label, if is_novel { ".epub" } else { ".cbz" });
 
         if use_ram && self.ram_enabled {
-            self.tmpfs_path().join(output_filename)
+            self.tmpfs_path().join(safe_manga_title).join(output_filename)
         } else {
-            self.downloads_folder_path.join(output_filename)
+            self.downloads_folder_path.join(safe_manga_title).join(output_filename)
         }
     }
 }

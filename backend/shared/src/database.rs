@@ -1,3 +1,5 @@
+// organized code is in here btw
+
 use chrono::TimeZone;
 use futures::TryStreamExt;
 use std::{
@@ -44,26 +46,26 @@ const BIND_LIMIT: usize = 32766;
 impl Database {
     pub async fn new(filename: &Path) -> Result<Self> {
         let options = SqliteConnectOptions::new()
-            .filename(filename)
-            .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Wal)
-            .synchronous(SqliteSynchronous::Normal)
-            .pragma("cache_size", "-2000")
-            .pragma("temp_store", "MEMORY")
-            .foreign_keys(true);
+        .filename(filename)
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .pragma("cache_size", "-2000")
+        .pragma("temp_store", "MEMORY")
+        .foreign_keys(true);
 
         let pool = PoolOptions::new()
-            .max_connections(4)
-            .min_connections(1)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_with(options)
-            .await?;
+        .max_connections(4)
+        .min_connections(1)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .connect_with(options)
+        .await?;
 
         sqlx::migrate!().run(&pool).await?;
 
         Ok(Self {
             pool: Arc::new(RwLock::new(pool)),
-            filename: filename.to_path_buf(),
+           filename: filename.to_path_buf(),
         })
     }
 
@@ -95,20 +97,20 @@ impl Database {
 
         // Create new pool with proper configuration
         let options = SqliteConnectOptions::new()
-            .filename(&self.filename)
-            .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Wal)
-            .synchronous(SqliteSynchronous::Normal)
-            .pragma("cache_size", "-2000")
-            .pragma("temp_store", "MEMORY")
-            .foreign_keys(true);
+        .filename(&self.filename)
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .pragma("cache_size", "-2000")
+        .pragma("temp_store", "MEMORY")
+        .foreign_keys(true);
 
         let new_pool = PoolOptions::new()
-            .max_connections(4)
-            .min_connections(1)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_with(options)
-            .await;
+        .max_connections(4)
+        .min_connections(1)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .connect_with(options)
+        .await;
 
         // If connection fails, restore backup
         let new_pool = match new_pool {
@@ -150,7 +152,7 @@ impl Database {
         let rows = sqlx::query_as!(
             MangaLibraryRow,
             r#"
-                SELECT * FROM manga_library;
+            SELECT * FROM manga_library;
             "#
         )
         .fetch_all(&*self.pool.read().await)
@@ -162,13 +164,13 @@ impl Database {
     pub async fn get_manga_library_and_status(&self) -> Result<Vec<(MangaId, PublishingStatus)>> {
         let rows = sqlx::query!(
             r#"
-            SELECT 
-                ml.manga_id,
-                ml.source_id,
-                md.status
+            SELECT
+            ml.manga_id,
+            ml.source_id,
+            md.status
             FROM manga_library ml
             LEFT JOIN manga_details md
-                ON ml.manga_id = md.id
+            ON ml.manga_id = md.id
             AND ml.source_id = md.source_id
             "#
         )
@@ -176,18 +178,18 @@ impl Database {
         .await?;
 
         Ok(rows
-            .into_iter()
-            .map(|row| {
-                (
-                    MangaId::from_strings(row.source_id, row.manga_id),
-                    row.status
-                        .map(|s| {
-                            <PublishingStatus as num_enum::FromPrimitive>::from_primitive(s as u8)
-                        })
-                        .unwrap_or(PublishingStatus::Unknown),
-                )
-            })
-            .collect())
+        .into_iter()
+        .map(|row| {
+            (
+                MangaId::from_strings(row.source_id, row.manga_id),
+             row.status
+             .map(|s| {
+                 <PublishingStatus as num_enum::FromPrimitive>::from_primitive(s as u8)
+             })
+             .unwrap_or(PublishingStatus::Unknown),
+            )
+        })
+        .collect())
     }
 
     pub async fn get_manga_library_with_read_count(
@@ -202,66 +204,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY ml.rowid
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY ml.rowid
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -272,66 +274,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY ml.rowid DESC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY ml.rowid DESC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -342,66 +344,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY mi.title COLLATE NOCASE ASC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY mi.title COLLATE NOCASE ASC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -412,66 +414,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY mi.title COLLATE NOCASE DESC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY mi.title COLLATE NOCASE DESC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -482,66 +484,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY unread_chapters_count ASC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY unread_chapters_count ASC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -552,66 +554,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY unread_chapters_count DESC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY unread_chapters_count DESC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -622,66 +624,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY lti.last_read_time ASC NULLS LAST
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY lti.last_read_time ASC NULLS LAST
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -692,66 +694,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY lti.last_read_time DESC NULLS LAST
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY lti.last_read_time DESC NULLS LAST
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -762,66 +764,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY ml.source_id COLLATE NOCASE ASC, mi.title COLLATE NOCASE ASC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY ml.source_id COLLATE NOCASE ASC, mi.title COLLATE NOCASE ASC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -832,66 +834,66 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        ml.source_id,
-                        ml.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS unread_chapters_count,
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM manga_library ml
-                    JOIN manga_informations mi
-                        ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = ml.source_id
-                        AND ci.manga_id = ml.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
-                    ORDER BY ml.source_id COLLATE NOCASE DESC, mi.title COLLATE NOCASE DESC
-                    "#
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                ml.source_id,
+                ml.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS unread_chapters_count,
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM manga_library ml
+                                JOIN manga_informations mi
+                                ON mi.source_id = ml.source_id AND mi.manga_id = ml.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = ml.source_id AND ms.manga_id = ml.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = ml.source_id AND lr.manga_id = ml.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = ml.source_id AND lti.manga_id = ml.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = ml.source_id
+                                AND ci.manga_id = ml.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                GROUP BY ml.source_id, ml.manga_id, lti.last_read_time
+                ORDER BY ml.source_id COLLATE NOCASE DESC, mi.title COLLATE NOCASE DESC
+                "#
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -899,27 +901,27 @@ impl Database {
         };
 
         let mangas = rows
-            .into_iter()
-            .filter_map(|row| {
-                let source = source_collection.get_by_id(&SourceId::new(row.source_id.clone()))?;
-                let info = MangaInformation {
-                    id: MangaId::from_strings(row.source_id, row.manga_id),
+        .into_iter()
+        .filter_map(|row| {
+            let source = source_collection.get_by_id(&SourceId::new(row.source_id.clone()))?;
+            let info = MangaInformation {
+                id: MangaId::from_strings(row.source_id, row.manga_id),
                     title: row.title,
                     author: row.author,
                     artist: row.artist,
                     cover_url: row.cover_url.and_then(|url| Url::parse(&url).ok()),
-                };
+            };
 
-                Some(Manga {
-                    source_information: SourceInformation::from(source.manifest()),
-                    information: info,
-                    state: MangaState::default(),
-                    unread_chapters_count: row.unread_chapters_count.map(|v| v as usize),
-                    last_read: row.last_read,
-                    in_library: true,
-                })
+            Some(Manga {
+                source_information: SourceInformation::from(source.manifest()),
+                 information: info,
+                 state: MangaState::default(),
+                 unread_chapters_count: row.unread_chapters_count.map(|v| v as usize),
+                 last_read: row.last_read,
+                 in_library: true,
             })
-            .collect();
+        })
+        .collect();
 
         Ok(mangas)
     }
@@ -930,12 +932,12 @@ impl Database {
 
         sqlx::query!(
             r#"
-                INSERT INTO manga_library (source_id, manga_id)
-                VALUES (?1, ?2)
-                ON CONFLICT DO NOTHING
-            "#,
-            source_id,
-            manga_id
+            INSERT INTO manga_library (source_id, manga_id)
+        VALUES (?1, ?2)
+        ON CONFLICT DO NOTHING
+        "#,
+        source_id,
+        manga_id
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -949,8 +951,8 @@ impl Database {
 
         sqlx::query!(
             r#"
-                DELETE FROM manga_library
-                WHERE source_id = ?1 AND manga_id = ?2
+            DELETE FROM manga_library
+            WHERE source_id = ?1 AND manga_id = ?2
             "#,
             source_id,
             manga_id
@@ -964,9 +966,9 @@ impl Database {
     pub async fn count_unread_chapters(&self, manga_id: &MangaId) -> Result<Option<usize>> {
         // Get preferred scanlator if it exists
         let preferred_scanlator = self
-            .find_manga_state(manga_id)
-            .await?
-            .and_then(|state| state.preferred_scanlator);
+        .find_manga_state(manga_id)
+        .await?
+        .and_then(|state| state.preferred_scanlator);
 
         let source_id = manga_id.source_id().value();
         let manga_id = manga_id.value();
@@ -974,29 +976,29 @@ impl Database {
         let row = sqlx::query_as!(
             UnreadChaptersRow,
             r#"
-                WITH filtered AS (
-                    SELECT ci.chapter_number, cs.read
-                    FROM chapter_informations ci
-                    LEFT JOIN chapter_state cs
-                        ON ci.source_id = cs.source_id
-                        AND ci.manga_id = cs.manga_id
-                        AND ci.chapter_id = cs.chapter_id
-                    WHERE ci.source_id = ?1
-                    AND ci.manga_id = ?2
-                    AND (?3 IS NULL OR ci.scanlator = ?3 OR ci.scanlator IS NULL)
-                ),
-                max_read AS (
-                    SELECT COALESCE(MAX(chapter_number), -1) AS last_read
-                    FROM filtered
-                    WHERE read = 1
-                )
-                SELECT
-                    COUNT(*) AS count,
-                    CASE WHEN EXISTS (SELECT 1 FROM filtered) THEN 1 ELSE 0 END AS "has_chapters: bool"
-                FROM filtered, max_read
-                WHERE filtered.chapter_number > max_read.last_read
-            "#,
-            source_id, manga_id, preferred_scanlator
+            WITH filtered AS (
+                SELECT ci.chapter_number, cs.read
+                FROM chapter_informations ci
+                LEFT JOIN chapter_state cs
+                ON ci.source_id = cs.source_id
+                AND ci.manga_id = cs.manga_id
+                AND ci.chapter_id = cs.chapter_id
+                WHERE ci.source_id = ?1
+                AND ci.manga_id = ?2
+                AND (?3 IS NULL OR ci.scanlator = ?3 OR ci.scanlator IS NULL)
+        ),
+        max_read AS (
+            SELECT COALESCE(MAX(chapter_number), -1) AS last_read
+            FROM filtered
+            WHERE read = 1
+        )
+        SELECT
+        COUNT(*) AS count,
+                                  CASE WHEN EXISTS (SELECT 1 FROM filtered) THEN 1 ELSE 0 END AS "has_chapters: bool"
+                                  FROM filtered, max_read
+                                  WHERE filtered.chapter_number > max_read.last_read
+                                  "#,
+                                  source_id, manga_id, preferred_scanlator
         )
         .fetch_one(&*self.pool.read().await)
         .await?;
@@ -1027,48 +1029,48 @@ impl Database {
             WITH inputs(source_id, manga_id) AS (
                 VALUES
                 {}
-            ),
-            filtered AS (
-                SELECT
-                    i.source_id,
-                    i.manga_id,
-                    ci.chapter_number,
-                    cs.read,
-                    cs.last_read as last_time
-                FROM inputs i
-                LEFT JOIN chapter_informations ci
-                    ON ci.source_id = i.source_id AND ci.manga_id = i.manga_id
-                LEFT JOIN chapter_state cs
-                    ON ci.source_id = cs.source_id
-                    AND ci.manga_id = cs.manga_id
-                    AND ci.chapter_id = cs.chapter_id
-            ),
-            max_read AS (
-                SELECT
-                    source_id,
-                    manga_id,
-                    COALESCE(MAX(CASE WHEN read = 1 THEN chapter_number END), -1) AS last_read,
-                    COALESCE(MAX(last_time), NULL) AS last_read_time
-                FROM filtered
-                GROUP BY source_id, manga_id
-            )
+        ),
+        filtered AS (
             SELECT
-                i.source_id,
-                i.manga_id,
-                COALESCE(COUNT(f.chapter_number), -1) AS count,
-                mr.last_read_time AS last_time,
-                CASE WHEN ml.source_id IS NOT NULL THEN TRUE ELSE FALSE END AS in_library
+            i.source_id,
+            i.manga_id,
+            ci.chapter_number,
+            cs.read,
+            cs.last_read as last_time
             FROM inputs i
-            LEFT JOIN filtered f
-                ON i.source_id = f.source_id AND i.manga_id = f.manga_id
-                AND f.chapter_number > COALESCE((SELECT last_read FROM max_read mr2 WHERE mr2.source_id = i.source_id AND mr2.manga_id = i.manga_id), -1)
-            LEFT JOIN max_read mr
-                ON i.source_id = mr.source_id AND i.manga_id = mr.manga_id
-            LEFT JOIN manga_library ml
-                ON i.source_id = ml.source_id AND i.manga_id = ml.manga_id
-            GROUP BY i.source_id, i.manga_id, mr.last_read_time, in_library
-            "#,
-            in_clause
+            LEFT JOIN chapter_informations ci
+            ON ci.source_id = i.source_id AND ci.manga_id = i.manga_id
+            LEFT JOIN chapter_state cs
+            ON ci.source_id = cs.source_id
+            AND ci.manga_id = cs.manga_id
+            AND ci.chapter_id = cs.chapter_id
+        ),
+        max_read AS (
+            SELECT
+            source_id,
+            manga_id,
+            COALESCE(MAX(CASE WHEN read = 1 THEN chapter_number END), -1) AS last_read,
+                            COALESCE(MAX(last_time), NULL) AS last_read_time
+                            FROM filtered
+                            GROUP BY source_id, manga_id
+        )
+        SELECT
+        i.source_id,
+        i.manga_id,
+        COALESCE(COUNT(f.chapter_number), -1) AS count,
+                            mr.last_read_time AS last_time,
+                            CASE WHEN ml.source_id IS NOT NULL THEN TRUE ELSE FALSE END AS in_library
+                            FROM inputs i
+                            LEFT JOIN filtered f
+                            ON i.source_id = f.source_id AND i.manga_id = f.manga_id
+                            AND f.chapter_number > COALESCE((SELECT last_read FROM max_read mr2 WHERE mr2.source_id = i.source_id AND mr2.manga_id = i.manga_id), -1)
+        LEFT JOIN max_read mr
+        ON i.source_id = mr.source_id AND i.manga_id = mr.manga_id
+        LEFT JOIN manga_library ml
+        ON i.source_id = ml.source_id AND i.manga_id = ml.manga_id
+        GROUP BY i.source_id, i.manga_id, mr.last_read_time, in_library
+        "#,
+        in_clause
         );
 
         // Bind params
@@ -1079,12 +1081,12 @@ impl Database {
         }
 
         let rows = query_builder
-            .fetch_all(&*self.pool.read().await)
-            .await
-            .map_err(|e| {
-                eprintln!("🔥 SQL query failed: {}", e);
-                e
-            })?;
+        .fetch_all(&*self.pool.read().await)
+        .await
+        .map_err(|e| {
+            eprintln!("🔥 SQL query failed: {}", e);
+            e
+        })?;
 
         for row in rows {
             let id = MangaId::new(SourceId::new(row.source_id), row.manga_id);
@@ -1092,8 +1094,8 @@ impl Database {
                 id,
                 (
                     row.count.map(|v| v as usize),
-                    row.last_time.map(|v| v as i64),
-                    row.in_library,
+                 row.last_time.map(|v| v as i64),
+                 row.in_library,
                 ),
             );
         }
@@ -1115,8 +1117,8 @@ impl Database {
         let maybe_row = sqlx::query_as!(
             MangaInformationsRow,
             r#"
-                SELECT * FROM manga_informations
-                    WHERE source_id = ?1 AND manga_id = ?2;
+            SELECT * FROM manga_informations
+            WHERE source_id = ?1 AND manga_id = ?2;
             "#,
             source_id,
             manga_id
@@ -1138,8 +1140,8 @@ impl Database {
         let maybe_row = sqlx::query_as!(
             ChapterInformationsRow,
             r#"
-                SELECT * FROM chapter_informations
-                WHERE source_id = ?1 AND manga_id = ?2 AND chapter_id = ?3;
+            SELECT * FROM chapter_informations
+            WHERE source_id = ?1 AND manga_id = ?2 AND chapter_id = ?3;
             "#,
             source_id,
             manga_id,
@@ -1157,8 +1159,7 @@ impl Database {
         invalid_mode: bool,
     ) -> Result<Vec<PathBuf>> {
         if invalid_mode {
-            let mut remaining = chapter_storage.collect_all_files(1);
-
+            let mut remaining = chapter_storage.collect_all_files(2);
             let pool_lock = self.pool.read().await;
             let mut stream = sqlx::query_as!(
                 ChapterInformationsRow,
@@ -1168,9 +1169,11 @@ impl Database {
 
             while let Some(row) = stream.try_next().await? {
                 let id = ChapterId::from_strings(row.source_id, row.manga_id, row.chapter_id);
-
+                let chapter_number_f32 = row.chapter_number.map(|n| n as f32);
+                let volume_number_f32 = row.volume_number.map(|n| n as f32);
+                let manga_title = "Unknown Manga";
                 for is_novel in [false, true] {
-                    let path = chapter_storage.get_path_to_store_chapter(&id, is_novel, false);
+                    let path = chapter_storage.get_path_to_store_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, is_novel, false);
                     if tokio::fs::try_exists(&path).await.unwrap_or(false) {
                         remaining.remove(&path);
                     }
@@ -1182,11 +1185,12 @@ impl Database {
                     if tokio::fs::try_exists(&path_file_errors)
                         .await
                         .unwrap_or(false)
-                    {
-                        remaining.remove(&path_file_errors);
-                    }
+                        {
+                            remaining.remove(&path_file_errors);
+                        }
                 }
             }
+
 
             Ok(remaining.into_iter().collect())
         } else {
@@ -1195,18 +1199,27 @@ impl Database {
             let pool_lock = self.pool.read().await;
             let mut stream = sqlx::query!(
                 r#"
-                SELECT source_id, manga_id, chapter_id
-                FROM chapter_state
-                WHERE read = 1
+                SELECT
+                    cs.source_id, cs.manga_id, cs.chapter_id,
+                    mi.title AS manga_title,
+                    ci.chapter_number, ci.volume_number
+                FROM chapter_state cs
+                LEFT JOIN manga_informations mi
+                    ON cs.source_id = mi.source_id AND cs.manga_id = mi.manga_id
+                LEFT JOIN chapter_informations ci
+                    ON cs.source_id = ci.source_id AND cs.manga_id = ci.manga_id AND cs.chapter_id = ci.chapter_id
+                WHERE cs.read = 1
                 "#
             )
             .fetch(&*pool_lock);
 
             while let Some(row) = stream.try_next().await? {
                 let id = ChapterId::from_strings(row.source_id, row.manga_id, row.chapter_id);
-
+                let chapter_number_f32 = row.chapter_number.map(|n| n as f32);
+                let volume_number_f32 = row.volume_number.map(|n| n as f32);
+                let manga_title = row.manga_title.as_deref().unwrap_or("Unknown Manga");
                 for is_novel in [false, true] {
-                    let path = chapter_storage.get_path_to_store_chapter(&id, is_novel, false);
+                    let path = chapter_storage.get_path_to_store_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, is_novel, false);
                     if tokio::fs::try_exists(&path).await.unwrap_or(false) {
                         paths.push(path.clone());
                     }
@@ -1218,9 +1231,9 @@ impl Database {
                     if tokio::fs::try_exists(&path_file_errors)
                         .await
                         .unwrap_or(false)
-                    {
-                        paths.push(path_file_errors);
-                    }
+                        {
+                            paths.push(path_file_errors);
+                        }
                 }
             }
 
@@ -1237,9 +1250,9 @@ impl Database {
 
         let rows = sqlx::query!(
             r#"
-                SELECT chapter_id
-                FROM chapter_informations
-                WHERE source_id = ?1 AND manga_id = ?2
+            SELECT chapter_id
+            FROM chapter_informations
+            WHERE source_id = ?1 AND manga_id = ?2
             "#,
             source_id,
             manga_id_value
@@ -1248,9 +1261,9 @@ impl Database {
         .await?;
 
         Ok(rows
-            .into_iter()
-            .map(|row| ChapterId::new(manga_id.clone(), row.chapter_id))
-            .collect())
+        .into_iter()
+        .map(|row| ChapterId::new(manga_id.clone(), row.chapter_id))
+        .collect())
     }
 
     pub async fn find_cached_chapter_informations(
@@ -1263,9 +1276,9 @@ impl Database {
         let rows = sqlx::query_as!(
             ChapterInformationsRow,
             r#"
-                SELECT * FROM chapter_informations
-                WHERE source_id = ?1 AND manga_id = ?2
-                ORDER BY manga_order ASC;
+            SELECT * FROM chapter_informations
+            WHERE source_id = ?1 AND manga_id = ?2
+            ORDER BY manga_order ASC;
             "#,
             source_id,
             manga_id
@@ -1287,25 +1300,29 @@ impl Database {
 
         let rows = sqlx::query!(
             r#"
-            SELECT 
-                ci.source_id,
-                ci.manga_id,
-                ci.chapter_id,
-                ci.title,
-                ci.scanlator,
-                ci.chapter_number,
-                ci.volume_number,
-                ci.last_updated,
-                ci.thumbnail,
-                ci.lang,
-                ci.locked AS "locked: bool",
-                cs.read AS "read?: bool",
-                cs.last_read AS "last_read?: i64"
+            SELECT
+            ci.source_id,
+            ci.manga_id,
+            ci.chapter_id,
+            ci.title,
+            ci.scanlator,
+            ci.chapter_number,
+            ci.volume_number,
+            ci.last_updated,
+            ci.thumbnail,
+            ci.lang,
+            ci.locked AS "locked: bool",
+            mi.title AS manga_title,
+            cs.read AS "read?: bool",
+            cs.last_read AS "last_read?: i64"
             FROM chapter_informations ci
             LEFT JOIN chapter_state cs
-                ON ci.source_id = cs.source_id
-                AND ci.manga_id = cs.manga_id
-                AND ci.chapter_id = cs.chapter_id
+            ON ci.source_id = cs.source_id
+            AND ci.manga_id = cs.manga_id
+            AND ci.chapter_id = cs.chapter_id
+            LEFT JOIN manga_informations mi
+            ON ci.source_id = mi.source_id
+            AND ci.manga_id = mi.manga_id
             WHERE ci.source_id = ?1 AND ci.manga_id = ?2
             GROUP BY ci.source_id, ci.manga_id, ci.chapter_id
             ORDER BY ci.manga_order ASC;
@@ -1317,49 +1334,51 @@ impl Database {
         .await?;
 
         Ok(rows
-            .into_iter()
-            .map(|row| {
-                let id = ChapterId::new(
-                    MangaId::new(SourceId::new(row.source_id), row.manga_id),
-                    row.chapter_id,
-                );
+        .into_iter()
+        .map(|row| {
+            let id = ChapterId::new(
+                MangaId::new(SourceId::new(row.source_id), row.manga_id),
+                                    row.chapter_id,
+            );
 
-                let information = ChapterInformation {
-                    id: id.clone(),
-                    title: row.title,
-                    scanlator: row.scanlator,
+            let information = ChapterInformation {
+                id: id.clone(),
+             title: row.title,
+             scanlator: row.scanlator,
 
-                    chapter_number: row.chapter_number.map(|v| v as f32),
-                    volume_number: row.volume_number.map(|v| v as f32),
-                    // manga_order: row.manga_order as usize,
-                    last_updated: row.last_updated,
-                    thumbnail: row.thumbnail.and_then(|s| Url::parse(&s).ok()),
-                    lang: row.lang,
+             chapter_number: row.chapter_number.map(|v| v as f32),
+             volume_number: row.volume_number.map(|v| v as f32),
+             // manga_order: row.manga_order as usize,
+             last_updated: row.last_updated,
+             thumbnail: row.thumbnail.and_then(|s| Url::parse(&s).ok()),
+             lang: row.lang,
 
-                    url: None,
-                    locked: Some(row.locked),
-                };
+             url: None,
+             locked: Some(row.locked),
+            };
 
-                let state = ChapterState {
-                    read: row.read.unwrap_or(false),
-                    last_read: row.last_read,
-                };
+            let state = ChapterState {
+                read: row.read.unwrap_or(false),
+             last_read: row.last_read,
+            };
 
-                let mut downloaded = chapter_storage.get_stored_chapter(&id, false).is_some();
-                let on_tmpfs =
-                    ram_mode_enabled && chapter_storage.get_stored_chapter(&id, true).is_some();
-                if on_tmpfs {
-                    downloaded = true;
-                }
+            let chapter_number_f32 = information.chapter_number;
+            let volume_number_f32 = information.volume_number;
+            let manga_title = row.manga_title.as_deref().unwrap_or("Unknown");
+            let mut downloaded = chapter_storage.get_stored_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, false).is_some();
+            let on_tmpfs = ram_mode_enabled && chapter_storage.get_stored_chapter(chapter_number_f32, manga_title, volume_number_f32, &id, true).is_some();
+            if on_tmpfs {
+                downloaded = true;
+            }
 
-                Chapter {
-                    information,
-                    state,
-                    downloaded,
-                    on_tmpfs,
-                }
-            })
-            .collect())
+            Chapter {
+                information,
+                state,
+                downloaded,
+                on_tmpfs,
+            }
+        })
+        .collect())
     }
 
     pub async fn upsert_cached_manga_information(
@@ -1391,14 +1410,14 @@ impl Database {
                 r#"
                 INSERT INTO manga_informations (
                     source_id, manga_id, title, author, artist, cover_url
-                )
-                VALUES {values_sql}
-                ON CONFLICT(source_id, manga_id) DO UPDATE SET
-                    title = excluded.title,
-                    author = excluded.author,
-                    artist = excluded.artist,
-                    cover_url = excluded.cover_url
-                "#
+            )
+            VALUES {values_sql}
+            ON CONFLICT(source_id, manga_id) DO UPDATE SET
+            title = excluded.title,
+            author = excluded.author,
+            artist = excluded.artist,
+            cover_url = excluded.cover_url
+            "#
             );
 
         let mut query = sqlx::query(sqlx::AssertSqlSafe(&*sql));
@@ -1425,26 +1444,26 @@ impl Database {
         let cached_chapter_ids: HashSet<_> = self.find_cached_chapter_ids(manga_id).await?;
 
         let chapter_ids: HashSet<_> = chapter_informations
-            .iter()
-            .map(|info| info.id.clone())
-            .collect();
+        .iter()
+        .map(|info| info.id.clone())
+        .collect();
         let removed_chapter_ids: Vec<_> = cached_chapter_ids
-            .difference(&chapter_ids)
-            .cloned()
-            .collect();
+        .difference(&chapter_ids)
+        .cloned()
+        .collect();
 
         let remove_chunk_size = BIND_LIMIT.saturating_sub(2);
         for chunk in removed_chapter_ids.chunks(remove_chunk_size) {
             let mut builder = QueryBuilder::new("DELETE FROM chapter_informations WHERE ");
             builder
-                .push("source_id = ")
-                .push_bind(manga_id.source_id().value())
-                .push(" AND manga_id = ")
-                .push_bind(manga_id.value())
-                .push(" AND chapter_id IN ")
-                .push_tuples(chunk, |mut b, chapter_id| {
-                    b.push_bind(chapter_id.value());
-                });
+            .push("source_id = ")
+            .push_bind(manga_id.source_id().value())
+            .push(" AND manga_id = ")
+            .push_bind(manga_id.value())
+            .push(" AND chapter_id IN ")
+            .push_tuples(chunk, |mut b, chapter_id| {
+                b.push_bind(chapter_id.value());
+            });
 
             builder.build().execute(&*self.pool.read().await).await?;
         }
@@ -1454,7 +1473,7 @@ impl Database {
 
         for (offset, chunk) in chapter_informations.chunks(CHUNK_SIZE).enumerate() {
             let mut builder = QueryBuilder::new(
-            "INSERT INTO chapter_informations (source_id, manga_id, chapter_id, manga_order, title, scanlator, chapter_number, volume_number, last_updated, thumbnail, lang, locked)"
+                "INSERT INTO chapter_informations (source_id, manga_id, chapter_id, manga_order, title, scanlator, chapter_number, volume_number, last_updated, thumbnail, lang, locked)"
             );
 
             builder.push_values(chunk.iter().enumerate(), |mut b, (i, info)| {
@@ -1463,21 +1482,21 @@ impl Database {
                 let last_updated = info.last_updated;
 
                 b.push_bind(info.id.source_id().value())
-                    .push_bind(info.id.manga_id().value())
-                    .push_bind(info.id.value())
-                    .push_bind((offset * CHUNK_SIZE + i) as i64)
-                    .push_bind(&info.title)
-                    .push_bind(&info.scanlator)
-                    .push_bind(chapter_number)
-                    .push_bind(volume_number)
-                    .push_bind(last_updated)
-                    .push_bind(info.thumbnail.as_ref().map(|s| s.to_string()))
-                    .push_bind(info.lang.as_ref().map(|s| s.to_string()))
-                    .push_bind(if info.locked.unwrap_or_default() {
-                        1
-                    } else {
-                        0
-                    });
+                .push_bind(info.id.manga_id().value())
+                .push_bind(info.id.value())
+                .push_bind((offset * CHUNK_SIZE + i) as i64)
+                .push_bind(&info.title)
+                .push_bind(&info.scanlator)
+                .push_bind(chapter_number)
+                .push_bind(volume_number)
+                .push_bind(last_updated)
+                .push_bind(info.thumbnail.as_ref().map(|s| s.to_string()))
+                .push_bind(info.lang.as_ref().map(|s| s.to_string()))
+                .push_bind(if info.locked.unwrap_or_default() {
+                    1
+                } else {
+                    0
+                });
             });
 
             builder.push(
@@ -1506,22 +1525,22 @@ impl Database {
         let row = sqlx::query_as!(
             MangaDetailsRow,
             r#"
-            SELECT 
-                md.*, 
-                COALESCE(AVG(cs.read), 0) AS "per_read: f64",
-                COALESCE(
-                    MAX(cs.last_read),
-                    0
-                ) AS "last_read: i64"
-            FROM manga_details md
-            LEFT JOIN chapter_state cs
-                ON cs.source_id = md.source_id
-                AND cs.manga_id = md.id
-            WHERE md.source_id = ?1 AND md.id = ?2
-            GROUP BY md.source_id, md.id
-            "#,
-            source_id,
-            manga_id
+            SELECT
+            md.*,
+            COALESCE(AVG(cs.read), 0) AS "per_read: f64",
+                                  COALESCE(
+                                      MAX(cs.last_read),
+                                  0
+        ) AS "last_read: i64"
+        FROM manga_details md
+        LEFT JOIN chapter_state cs
+        ON cs.source_id = md.source_id
+        AND cs.manga_id = md.id
+        WHERE md.source_id = ?1 AND md.id = ?2
+        GROUP BY md.source_id, md.id
+        "#,
+        source_id,
+        manga_id
         )
         .fetch_optional(&*self.pool.read().await)
         .await?;
@@ -1544,9 +1563,9 @@ impl Database {
 
         // Serialize tags to JSON (Option<Vec<String>> → Option<String>)
         let tags = manga
-            .tags
-            .as_ref()
-            .map(|t| serde_json::to_string(t).unwrap());
+        .tags
+        .as_ref()
+        .map(|t| serde_json::to_string(t).unwrap());
 
         // Convert Url → Option<String>
         let cover_url = manga.cover_url.as_ref().map(|u| u.as_str().to_string());
@@ -1579,38 +1598,38 @@ impl Database {
                 last_updated,
                 last_opened,
                 date_added
-            )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
-            ON CONFLICT(source_id, id) DO UPDATE SET
-                title        = excluded.title,
-                author       = excluded.author,
-                artist       = excluded.artist,
-                description  = excluded.description,
-                tags         = excluded.tags,
-                cover_url    = excluded.cover_url,
-                url          = excluded.url,
-                status       = excluded.status,
-                nsfw         = excluded.nsfw,
-                viewer       = excluded.viewer,
-                last_updated = excluded.last_updated,
-                last_opened  = excluded.last_opened,
-                date_added   = excluded.date_added
-            "#,
-            source_id,
-            id,
-            manga.title,
-            manga.author,
-            manga.artist,
-            manga.description,
-            tags,
-            cover_url,
-            url,
-            status,
-            nsfw,
-            viewer,
-            last_updated,
-            last_opened,
-            date_added,
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+        ON CONFLICT(source_id, id) DO UPDATE SET
+        title        = excluded.title,
+        author       = excluded.author,
+        artist       = excluded.artist,
+        description  = excluded.description,
+        tags         = excluded.tags,
+        cover_url    = excluded.cover_url,
+        url          = excluded.url,
+        status       = excluded.status,
+        nsfw         = excluded.nsfw,
+        viewer       = excluded.viewer,
+        last_updated = excluded.last_updated,
+        last_opened  = excluded.last_opened,
+        date_added   = excluded.date_added
+        "#,
+        source_id,
+        id,
+        manga.title,
+        manga.author,
+        manga.artist,
+        manga.description,
+        tags,
+        cover_url,
+        url,
+        status,
+        nsfw,
+        viewer,
+        last_updated,
+        last_opened,
+        date_added,
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -1625,9 +1644,9 @@ impl Database {
         let maybe_row = sqlx::query_as!(
             MangaStateRow,
             r#"
-                SELECT source_id, manga_id, preferred_scanlator 
-                FROM manga_state
-                WHERE source_id = ?1 AND manga_id = ?2;
+            SELECT source_id, manga_id, preferred_scanlator
+            FROM manga_state
+            WHERE source_id = ?1 AND manga_id = ?2;
             "#,
             source_id,
             manga_id,
@@ -1644,14 +1663,14 @@ impl Database {
 
         sqlx::query!(
             r#"
-                INSERT INTO manga_state (source_id, manga_id, preferred_scanlator)
-                VALUES (?1, ?2, ?3)
-                ON CONFLICT DO UPDATE SET
-                    preferred_scanlator = excluded.preferred_scanlator
-            "#,
-            source_id,
-            manga_id,
-            state.preferred_scanlator,
+            INSERT INTO manga_state (source_id, manga_id, preferred_scanlator)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT DO UPDATE SET
+        preferred_scanlator = excluded.preferred_scanlator
+        "#,
+        source_id,
+        manga_id,
+        state.preferred_scanlator,
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -1669,8 +1688,8 @@ impl Database {
         let maybe_row = sqlx::query_as!(
             ChapterStateRow,
             r#"
-                SELECT source_id, manga_id, chapter_id, read AS "read: bool", last_read AS "last_read?: i64" FROM chapter_state
-                WHERE source_id = ?1 AND manga_id = ?2 AND chapter_id = ?3;
+            SELECT source_id, manga_id, chapter_id, read AS "read: bool", last_read AS "last_read?: i64" FROM chapter_state
+            WHERE source_id = ?1 AND manga_id = ?2 AND chapter_id = ?3;
             "#,
             source_id,
             manga_id,
@@ -1692,8 +1711,8 @@ impl Database {
         let rows = sqlx::query_as!(
             ChapterStateRow,
             r#"
-                SELECT source_id, manga_id, chapter_id, read AS "read: bool", last_read AS "last_read?: i64" FROM chapter_state
-                WHERE source_id = ?1 AND manga_id = ?2;
+            SELECT source_id, manga_id, chapter_id, read AS "read: bool", last_read AS "last_read?: i64" FROM chapter_state
+            WHERE source_id = ?1 AND manga_id = ?2;
             "#,
             source_id,
             manga_id,
@@ -1702,9 +1721,9 @@ impl Database {
         .await?;
 
         Ok(rows
-            .into_iter()
-            .map(|row| (row.chapter_id.clone(), row.into()))
-            .collect())
+        .into_iter()
+        .map(|row| (row.chapter_id.clone(), row.into()))
+        .collect())
     }
 
     pub async fn upsert_chapter_state(
@@ -1718,17 +1737,17 @@ impl Database {
 
         sqlx::query!(
             r#"
-                INSERT INTO chapter_state (source_id, manga_id, chapter_id, read, last_read)
-                VALUES (?1, ?2, ?3, ?4, ?5)
-                ON CONFLICT DO UPDATE SET
-                    read = excluded.read,
-                    last_read = excluded.last_read
-            "#,
-            source_id,
-            manga_id,
-            chapter_id,
-            state.read,
-            state.last_read,
+            INSERT INTO chapter_state (source_id, manga_id, chapter_id, read, last_read)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT DO UPDATE SET
+        read = excluded.read,
+        last_read = excluded.last_read
+        "#,
+        source_id,
+        manga_id,
+        chapter_id,
+        state.read,
+        state.last_read,
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -1751,19 +1770,19 @@ impl Database {
         sqlx::query!(
             r#"
             INSERT INTO chapter_state (source_id, manga_id, chapter_id, read, last_read)
-            VALUES (?1, ?2, ?3, ?4, ?5)
-            ON CONFLICT DO UPDATE SET
-                read = excluded.read,
-                last_read = CASE
-                    WHEN excluded.read = TRUE THEN excluded.last_read
-                    ELSE NULL
-                END
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT DO UPDATE SET
+        read = excluded.read,
+        last_read = CASE
+        WHEN excluded.read = TRUE THEN excluded.last_read
+        ELSE NULL
+        END
         "#,
-            source_id,
-            manga_id,
-            chapter_id,
-            value,
-            now,
+        source_id,
+        manga_id,
+        chapter_id,
+        value,
+        now,
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -1781,14 +1800,14 @@ impl Database {
         sqlx::query!(
             r#"
             INSERT INTO chapter_state (source_id, manga_id, chapter_id, read, last_read)
-            VALUES (?1, ?2, ?3, FALSE, ?4)
-            ON CONFLICT DO UPDATE SET
-                last_read = excluded.last_read
+        VALUES (?1, ?2, ?3, FALSE, ?4)
+        ON CONFLICT DO UPDATE SET
+        last_read = excluded.last_read
         "#,
-            source_id,
-            manga_id,
-            chapter_id,
-            now,
+        source_id,
+        manga_id,
+        chapter_id,
+        now,
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -1827,15 +1846,15 @@ impl Database {
                 manga_id,
                 last_check,
                 next_ts_arima
-            ) VALUES (?1, ?2, ?3, ?4)
-            ON CONFLICT(source_id, manga_id) DO UPDATE SET
-                last_check = excluded.last_check,
-                next_ts_arima = excluded.next_ts_arima
-            "#,
-            source_id,
-            manga_id,
-            value,
-            next_ts_arima
+        ) VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(source_id, manga_id) DO UPDATE SET
+        last_check = excluded.last_check,
+        next_ts_arima = excluded.next_ts_arima
+        "#,
+        source_id,
+        manga_id,
+        value,
+        next_ts_arima
         )
         .execute(&*self.pool.read().await)
         .await?;
@@ -1889,10 +1908,10 @@ impl Database {
         // Bind all values in order
         for ch in new_chapters {
             query = query
-                .bind(manga_id.source_id().value())
-                .bind(manga_id.value()) // manga_id
-                .bind(ch.id.value()) // chapter_id
-                .bind(now); // created_at
+            .bind(manga_id.source_id().value())
+            .bind(manga_id.value()) // manga_id
+            .bind(ch.id.value()) // chapter_id
+            .bind(now); // created_at
         }
 
         // Execute
@@ -1910,7 +1929,7 @@ impl Database {
         } else {
             format!(
                 "AND source_id NOT IN ({})",
-                std::iter::repeat_n("?", skip_sources.len())
+                    std::iter::repeat_n("?", skip_sources.len())
                     .collect::<Vec<_>>()
                     .join(",")
             )
@@ -1940,9 +1959,9 @@ impl Database {
             (
                 MangaId::from_strings(
                     row.get::<String, _>("source_id"),
-                    row.get::<String, _>("manga_id"),
+                                      row.get::<String, _>("manga_id"),
                 ),
-                row.get::<i64, _>("next_ts_arima"),
+             row.get::<i64, _>("next_ts_arima"),
             )
         }))
     }
@@ -1952,12 +1971,12 @@ impl Database {
         let due_mangas = sqlx::query!(
             r#"
             SELECT
-                ml.manga_id, ml.source_id, md.status
+            ml.manga_id, ml.source_id, md.status
             FROM
-                last_check_update ml
+            last_check_update ml
             LEFT JOIN manga_details md
             ON ml.manga_id = md.id AND
-                ml.source_id = md.source_id
+            ml.source_id = md.source_id
             WHERE ml.next_ts_arima <= ?1
             "#,
             now
@@ -1966,27 +1985,27 @@ impl Database {
         .await?;
 
         Ok(due_mangas
-            .into_iter()
-            .map(|row| {
-                (
-                    MangaId::from_strings(row.source_id, row.manga_id),
-                    row.status
-                        .map(|s| {
-                            <PublishingStatus as num_enum::FromPrimitive>::from_primitive(s as u8)
-                        })
-                        .unwrap_or(PublishingStatus::Unknown),
-                )
-            })
-            .collect())
+        .into_iter()
+        .map(|row| {
+            (
+                MangaId::from_strings(row.source_id, row.manga_id),
+             row.status
+             .map(|s| {
+                 <PublishingStatus as num_enum::FromPrimitive>::from_primitive(s as u8)
+             })
+             .unwrap_or(PublishingStatus::Unknown),
+            )
+        })
+        .collect())
     }
 
     pub async fn get_count_notifications(&self) -> Result<i32> {
         let value = sqlx::query!(
             r#"
             SELECT
-                COUNT(*) as "count: i32"
+            COUNT(*) as "count: i32"
             FROM
-                notifications
+            notifications
             WHERE is_read = 0
             "#
         )
@@ -2001,28 +2020,28 @@ impl Database {
             NotificationInformationRow,
             r#"
             SELECT
-                n.id,
-                n.source_id,
-                n.manga_id,
-                n.chapter_id,
-                mi.title AS manga_title,
-                md.cover_url AS manga_cover,
-                md.status AS manga_status,
-                ci.title AS chapter_title,
-                ci.chapter_number,
-                n.created_at
+            n.id,
+            n.source_id,
+            n.manga_id,
+            n.chapter_id,
+            mi.title AS manga_title,
+            md.cover_url AS manga_cover,
+            md.status AS manga_status,
+            ci.title AS chapter_title,
+            ci.chapter_number,
+            n.created_at
             FROM
-                notifications n
+            notifications n
             LEFT JOIN manga_informations mi
-                ON mi.manga_id = n.manga_id AND mi.source_id = n.source_id
+            ON mi.manga_id = n.manga_id AND mi.source_id = n.source_id
             LEFT JOIN manga_details md
-                ON md.id = n.manga_id AND md.source_id = n.source_id
+            ON md.id = n.manga_id AND md.source_id = n.source_id
             LEFT JOIN chapter_informations ci
-                ON ci.manga_id = n.manga_id AND ci.source_id = n.source_id AND ci.chapter_id = n.chapter_id
+            ON ci.manga_id = n.manga_id AND ci.source_id = n.source_id AND ci.chapter_id = n.chapter_id
             WHERE
-                n.is_read = 0
+            n.is_read = 0
             ORDER BY
-                n.created_at DESC
+            n.created_at DESC
             "#,
         )
         .fetch_all(&*self.pool.read().await)
@@ -2071,8 +2090,8 @@ impl Database {
         let mut sql = String::from(
             r#"
             INSERT INTO chapter_state (source_id, manga_id, chapter_id, read)
-            VALUES
-            "#,
+        VALUES
+        "#,
         );
 
         for i in 0..ids.len() {
@@ -2085,23 +2104,23 @@ impl Database {
         sql.push_str(
             r#"
             ON CONFLICT (source_id, manga_id, chapter_id)
-            DO UPDATE SET
-                read = excluded.read,
-                last_read = CASE
-                    WHEN excluded.read = TRUE THEN chapter_state.last_read
-                    ELSE NULL
-                END
-            "#,
+        DO UPDATE SET
+        read = excluded.read,
+        last_read = CASE
+        WHEN excluded.read = TRUE THEN chapter_state.last_read
+        ELSE NULL
+        END
+        "#,
         );
 
         let mut query = sqlx::query(sqlx::AssertSqlSafe(&*sql));
 
         for id in ids {
             query = query
-                .bind(id.source_id().value())
-                .bind(id.manga_id().value())
-                .bind(id.value())
-                .bind(read);
+            .bind(id.source_id().value())
+            .bind(id.manga_id().value())
+            .bind(id.value())
+            .bind(read);
         }
 
         query.execute(&*self.pool.read().await).await?;
@@ -2111,33 +2130,33 @@ impl Database {
 
     pub async fn get_playlists(&self) -> Result<Vec<Playlist>> {
         let playlists = sqlx::query_as!(Playlist, "SELECT id, name FROM playlists")
-            .fetch_all(&*self.pool.read().await)
-            .await?;
+        .fetch_all(&*self.pool.read().await)
+        .await?;
 
         Ok(playlists)
     }
 
     pub async fn create_playlist(&self, name: String) -> Result<Playlist> {
         let row: (i64,) = sqlx::query_as("INSERT INTO playlists (name) VALUES (?1) RETURNING id")
-            .bind(&name)
-            .fetch_one(&*self.pool.read().await)
-            .await?;
+        .bind(&name)
+        .fetch_one(&*self.pool.read().await)
+        .await?;
 
         Ok(Playlist { id: row.0, name })
     }
 
     pub async fn delete_playlist(&self, id: i64) -> Result<()> {
         sqlx::query!("DELETE FROM playlists WHERE id = ?1", id)
-            .execute(&*self.pool.read().await)
-            .await?;
+        .execute(&*self.pool.read().await)
+        .await?;
 
         Ok(())
     }
 
     pub async fn rename_playlist(&self, id: i64, name: String) -> Result<()> {
         sqlx::query!("UPDATE playlists SET name = ?1 WHERE id = ?2", name, id)
-            .execute(&*self.pool.read().await)
-            .await?;
+        .execute(&*self.pool.read().await)
+        .await?;
 
         Ok(())
     }
@@ -2147,8 +2166,8 @@ impl Database {
         let manga_id = manga_id.value();
 
         sqlx::query!("INSERT INTO playlist_mangas (playlist_id, source_id, manga_id) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING", playlist_id, source_id, manga_id)
-            .execute(&*self.pool.read().await)
-            .await?;
+        .execute(&*self.pool.read().await)
+        .await?;
 
         Ok(())
     }
@@ -2162,8 +2181,8 @@ impl Database {
         let manga_id = manga_id.value();
 
         sqlx::query!("DELETE FROM playlist_mangas WHERE playlist_id = ?1 AND source_id = ?2 AND manga_id = ?3", playlist_id, source_id, manga_id)
-            .execute(&*self.pool.read().await)
-            .await?;
+        .execute(&*self.pool.read().await)
+        .await?;
 
         Ok(())
     }
@@ -2181,140 +2200,140 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY pm.rowid
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY pm.rowid
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
             }
-             crate::settings::LibrarySortingMode::Descending => {
+            crate::settings::LibrarySortingMode::Descending => {
                 sqlx::query_as!(
                     MangaLibraryRowWithReadCount,
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY pm.rowid DESC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY pm.rowid DESC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2325,68 +2344,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY mi.title COLLATE NOCASE ASC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY mi.title COLLATE NOCASE ASC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2397,68 +2416,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY mi.title COLLATE NOCASE DESC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY mi.title COLLATE NOCASE DESC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2469,68 +2488,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY 7 ASC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY 7 ASC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2541,68 +2560,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY 7 DESC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY 7 DESC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2613,68 +2632,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY lti.last_read_time ASC NULLS LAST
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY lti.last_read_time ASC NULLS LAST
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2685,68 +2704,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY lti.last_read_time DESC NULLS LAST
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY lti.last_read_time DESC NULLS LAST
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2757,68 +2776,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY pm.source_id COLLATE NOCASE ASC, mi.title COLLATE NOCASE ASC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY pm.source_id COLLATE NOCASE ASC, mi.title COLLATE NOCASE ASC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2829,68 +2848,68 @@ impl Database {
                     r#"
                     WITH last_read AS (
                         SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            MAX(ci.chapter_number) AS last_read_chapter
+                        ci.source_id,
+                        ci.manga_id,
+                        MAX(ci.chapter_number) AS last_read_chapter
                         FROM chapter_informations ci
                         JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
+                        ON ci.source_id = cs.source_id
+                        AND ci.manga_id = cs.manga_id
+                        AND ci.chapter_id = cs.chapter_id
                         LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                        ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
                         WHERE (ms.preferred_scanlator IS NULL
                         OR ci.scanlator = ms.preferred_scanlator
                         OR ci.scanlator IS NULL)
-                        AND cs.read = 1
-                        GROUP BY ci.source_id, ci.manga_id
-                    ),
-                    last_time_interacted AS (
-                        SELECT
-                            ci.source_id,
-                            ci.manga_id,
-                            COALESCE(MAX(cs.last_read), 0) AS last_read_time
-                        FROM chapter_informations ci
-                        JOIN chapter_state cs
-                            ON ci.source_id = cs.source_id
-                            AND ci.manga_id = cs.manga_id
-                            AND ci.chapter_id = cs.chapter_id
-                        LEFT JOIN manga_state ms
-                            ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
-                        WHERE (ms.preferred_scanlator IS NULL
-                        OR ci.scanlator = ms.preferred_scanlator
-                        OR ci.scanlator IS NULL)
-                        AND cs.last_read IS NOT NULL
-                        GROUP BY ci.source_id, ci.manga_id
-                    )
+                AND cs.read = 1
+                GROUP BY ci.source_id, ci.manga_id
+                ),
+                last_time_interacted AS (
                     SELECT
-                        pm.source_id,
-                        pm.manga_id,
-                        mi.title,
-                        mi.author,
-                        mi.artist,
-                        mi.cover_url,
-                        COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
-                        lti.last_read_time AS "last_read?: i64"
-                    FROM playlist_mangas pm
-                    JOIN manga_informations mi
-                        ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                    ci.source_id,
+                    ci.manga_id,
+                    COALESCE(MAX(cs.last_read), 0) AS last_read_time
+                    FROM chapter_informations ci
+                    JOIN chapter_state cs
+                    ON ci.source_id = cs.source_id
+                    AND ci.manga_id = cs.manga_id
+                    AND ci.chapter_id = cs.chapter_id
                     LEFT JOIN manga_state ms
-                        ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
-                    LEFT JOIN last_read lr
-                        ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
-                    LEFT JOIN last_time_interacted lti
-                        ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
-                    LEFT JOIN chapter_informations ci
-                        ON ci.source_id = pm.source_id
-                        AND ci.manga_id = pm.manga_id
-                        AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
-                        AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
-                    WHERE pm.playlist_id = ?1
-                    GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
-                    ORDER BY pm.source_id COLLATE NOCASE DESC, mi.title COLLATE NOCASE DESC
-                    "#,
-                    playlist_id
+                    ON ms.source_id = ci.source_id AND ms.manga_id = ci.manga_id
+                    WHERE (ms.preferred_scanlator IS NULL
+                    OR ci.scanlator = ms.preferred_scanlator
+                    OR ci.scanlator IS NULL)
+                AND cs.last_read IS NOT NULL
+                GROUP BY ci.source_id, ci.manga_id
+                )
+                SELECT
+                pm.source_id,
+                pm.manga_id,
+                mi.title,
+                mi.author,
+                mi.artist,
+                mi.cover_url,
+                COUNT(ci.chapter_number) AS "unread_chapters_count: i64",
+                                lti.last_read_time AS "last_read?: i64"
+                                FROM playlist_mangas pm
+                                JOIN manga_informations mi
+                                ON mi.source_id = pm.source_id AND mi.manga_id = pm.manga_id
+                                LEFT JOIN manga_state ms
+                                ON ms.source_id = pm.source_id AND ms.manga_id = pm.manga_id
+                                LEFT JOIN last_read lr
+                                ON lr.source_id = pm.source_id AND lr.manga_id = pm.manga_id
+                                LEFT JOIN last_time_interacted lti
+                                ON lti.source_id = pm.source_id AND lti.manga_id = pm.manga_id
+                                LEFT JOIN chapter_informations ci
+                                ON ci.source_id = pm.source_id
+                                AND ci.manga_id = pm.manga_id
+                                AND (ms.preferred_scanlator IS NULL OR ci.scanlator = ms.preferred_scanlator OR ci.scanlator IS NULL)
+                AND ci.chapter_number > COALESCE(lr.last_read_chapter, -1)
+                WHERE pm.playlist_id = ?1
+                GROUP BY pm.source_id, pm.manga_id, lti.last_read_time
+                ORDER BY pm.source_id COLLATE NOCASE DESC, mi.title COLLATE NOCASE DESC
+                "#,
+                playlist_id
                 )
                 .fetch_all(&*self.pool.read().await)
                 .await?
@@ -2898,27 +2917,27 @@ impl Database {
         };
 
         let mangas = rows
-            .into_iter()
-            .filter_map(|row| {
-                let source = source_collection.get_by_id(&SourceId::new(row.source_id.clone()))?;
-                let info = MangaInformation {
-                    id: MangaId::from_strings(row.source_id, row.manga_id),
+        .into_iter()
+        .filter_map(|row| {
+            let source = source_collection.get_by_id(&SourceId::new(row.source_id.clone()))?;
+            let info = MangaInformation {
+                id: MangaId::from_strings(row.source_id, row.manga_id),
                     title: row.title,
                     author: row.author,
                     artist: row.artist,
                     cover_url: row.cover_url.and_then(|url| Url::parse(&url).ok()),
-                };
+            };
 
-                Some(Manga {
-                    source_information: SourceInformation::from(source.manifest()),
-                    information: info,
-                    state: MangaState::default(),
-                    unread_chapters_count: row.unread_chapters_count.map(|v| v as usize),
-                    last_read: row.last_read,
-                    in_library: false,
-                })
+            Some(Manga {
+                source_information: SourceInformation::from(source.manifest()),
+                 information: info,
+                 state: MangaState::default(),
+                 unread_chapters_count: row.unread_chapters_count.map(|v| v as usize),
+                 last_read: row.last_read,
+                 in_library: false,
             })
-            .collect();
+        })
+        .collect();
 
         Ok(mangas)
     }
@@ -2972,8 +2991,8 @@ impl From<MangaInformationsRow> for MangaInformation {
             author: value.author,
             artist: value.artist,
             cover_url: value
-                .cover_url
-                .map(|url_string| url_string.as_str().try_into().unwrap()),
+            .cover_url
+            .map(|url_string| url_string.as_str().try_into().unwrap()),
         }
     }
 }
@@ -3012,9 +3031,9 @@ impl From<MangaDetailsRow> for crate::source::model::Manga {
 
         // Parse URLs
         let cover_url = row
-            .cover_url
-            .as_ref()
-            .map(|s| s.as_str().try_into().unwrap());
+        .cover_url
+        .as_ref()
+        .map(|s| s.as_str().try_into().unwrap());
 
         let url = row.url.as_ref().map(|s| s.as_str().try_into().unwrap());
 
@@ -3022,8 +3041,8 @@ impl From<MangaDetailsRow> for crate::source::model::Manga {
         let parse_dt = |v: Option<String>| {
             v.map(|s| {
                 chrono::DateTime::parse_from_rfc3339(&s)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::UTC)
+                .unwrap()
+                .with_timezone(&chrono_tz::UTC)
             })
         };
 
@@ -3048,9 +3067,9 @@ impl From<MangaDetailsRow> for crate::source::model::Manga {
             last_read: if let Some(last_read) = row.last_read {
                 if last_read >= 0 {
                     chrono::Utc
-                        .timestamp_opt(last_read, 0)
-                        .single()
-                        .map(|d| d.with_timezone(&chrono_tz::UTC))
+                    .timestamp_opt(last_read, 0)
+                    .single()
+                    .map(|d| d.with_timezone(&chrono_tz::UTC))
                 } else {
                     None
                 }
@@ -3180,9 +3199,9 @@ impl From<NotificationInformationRow> for NotificationInformation {
             chapter_id: ChapterId::from_strings(value.source_id, value.manga_id, value.chapter_id),
             manga_title: value.manga_title.unwrap_or("Unknown".to_owned()),
             manga_cover: value
-                .manga_cover
-                .map(|u| url::Url::parse(&u).map(Some).unwrap_or(None))
-                .unwrap_or(None),
+            .manga_cover
+            .map(|u| url::Url::parse(&u).map(Some).unwrap_or(None))
+            .unwrap_or(None),
             manga_status: value.manga_status,
             chapter_title: value.chapter_title.unwrap_or("Unknown".to_owned()),
             chapter_number: value.chapter_number.unwrap_or(-1.0),

@@ -11,7 +11,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,7 +34,19 @@ jobs:
           components: rustfmt, clippy
           override: true
 
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features sqlite
+      
+      - name: Set up database
+        working-directory: ./backend
+        run: |
+          export DATABASE_URL="sqlite://dev.db"
+          sqlx database create
+          sqlx migrate run --source shared/migrations
+
       - name: Run tests
         working-directory: ./backend
+        env:
+          DATABASE_URL: "sqlite://dev.db"
         run: cargo test --all
 
